@@ -45,3 +45,15 @@ Config/release.local.sh
 # Personal upstream channels for Scripts/check_upstream_updates.py.
 Scripts/upstream_sources.local.json
 LOCAL_RELEASE.md
+
+# Android / Gradle build outputs and signing credentials
+android/.gradle/
+android/local.properties
+android/signing.properties
+android/**/build/
+*.jks
+*.keystore
+*.apk
+*.aab
+android/.idea/
+*.iml
