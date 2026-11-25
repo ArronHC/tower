@@ -1,0 +1,16 @@
+{
+  "name": "tower-web",
+  "version": "1.0.34",
+  "private": true,
+  "description": "塔台 · Tower Web Edition (Local-First Proxy Subscription & Rule Manager)",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "dev": "node -e \"const { spawn } = require('child_process'); const s = spawn('npm', ['--prefix', 'server', 'run', 'dev'], { stdio: 'inherit' }); const c = spawn('npm', ['--prefix', 'client', 'run', 'dev'], { stdio: 'inherit' }); process.on('SIGINT', () => { s.kill(); c.kill(); process.exit(0); });\"",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "start": "npm --prefix server run start",
+    "test": "npm --prefix server run test",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck"
+  }
+}

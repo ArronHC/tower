@@ -45,3 +45,11 @@ Config/release.local.sh
 # Personal upstream channels for Scripts/check_upstream_updates.py.
 Scripts/upstream_sources.local.json
 LOCAL_RELEASE.md
+
+# Web version build artifacts, dependencies, and local state
+web/**/node_modules/
+web/**/dist/
+web/server/data/
+web/server/.env*
+web/client/.env*
+
