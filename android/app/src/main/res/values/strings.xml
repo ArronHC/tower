@@ -5,4 +5,9 @@
     <string name="lan_channel_desc">保持本地局域网订阅服务器运行，以便其他设备导入配置</string>
     <string name="lan_notification_title">塔台局域网订阅已开启</string>
     <string name="lan_notification_stop">停止共享</string>
+    <string name="tab_subscriptions">订阅</string>
+    <string name="tab_rules">规则</string>
+    <string name="tab_export">导出</string>
+    <string name="tab_settings">设置</string>
+    <string name="privacy_badge">全部在这台设备上处理</string>
 </resources>
