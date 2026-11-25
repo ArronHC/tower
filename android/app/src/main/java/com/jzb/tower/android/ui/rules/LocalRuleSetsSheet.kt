@@ -41,8 +41,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.jzb.tower.android.ui.components.TintedActionButton
 import com.jzb.tower.android.ui.components.TowerCard
+import com.jzb.tower.android.ui.components.TowerFloatingPillButton
 import com.jzb.tower.android.ui.theme.TowerTheme
 import com.jzb.tower.core.model.LocalRuleSet
 import kotlinx.coroutines.launch
@@ -69,13 +69,14 @@ fun LocalRuleSetsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        dragHandle = null,
         containerColor = palette.groupedBackground,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 26.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
@@ -83,16 +84,19 @@ fun LocalRuleSetsSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "本地规则集",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = palette.textPrimary,
-                )
-                TintedActionButton(
+                TowerFloatingPillButton(
                     text = "新建",
                     icon = Icons.Rounded.Add,
                     onClick = { showCreateDialog = true },
-                    modifier = Modifier.height(38.dp),
+                )
+                Text(
+                    text = "我的规则集",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.textPrimary,
+                )
+                TowerFloatingPillButton(
+                    text = "完成",
+                    onClick = onDismiss,
                 )
             }
 
@@ -159,6 +163,7 @@ fun LocalRuleSetsSheet(
                     }
                 }
             }
+            Spacer(Modifier.height(6.dp))
         }
     }
 

@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jzb.tower.android.ui.components.TowerCard
+import com.jzb.tower.android.ui.components.TowerFloatingPillButton
 import com.jzb.tower.android.ui.theme.TowerTheme
 import com.jzb.tower.core.model.RuleCatalogEntry
 
@@ -47,6 +48,7 @@ import com.jzb.tower.core.model.RuleCatalogEntry
 @Composable
 fun RuleCatalogSheet(
     schemeId: String,
+    initialQuery: String = "",
     availablePolicies: List<String>,
     onSearch: (query: String, source: String) -> List<RuleCatalogEntry>,
     onAttachEntry: (RuleCatalogEntry, policyName: String) -> Unit,
@@ -54,7 +56,7 @@ fun RuleCatalogSheet(
 ) {
     val palette = TowerTheme.palette
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var query by remember { mutableStateOf("") }
+    var query by remember(initialQuery) { mutableStateOf(initialQuery) }
     var sourceFilter by remember { mutableStateOf("all") }
     var pendingEntry by remember { mutableStateOf<RuleCatalogEntry?>(null) }
 
@@ -65,20 +67,31 @@ fun RuleCatalogSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        dragHandle = null,
         containerColor = palette.groupedBackground,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 24.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = "规则库",
-                style = MaterialTheme.typography.headlineSmall,
-                color = palette.textPrimary,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "规则库",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = palette.textPrimary,
+                )
+                TowerFloatingPillButton(
+                    text = "完成",
+                    onClick = onDismiss,
+                )
+            }
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -144,6 +157,7 @@ fun RuleCatalogSheet(
                     }
                 }
             }
+            Spacer(Modifier.height(6.dp))
         }
     }
 

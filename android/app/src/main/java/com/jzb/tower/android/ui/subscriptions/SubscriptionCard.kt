@@ -1,12 +1,20 @@
 package com.jzb.tower.android.ui.subscriptions
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,27 +24,28 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.DonutLarge
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.RssFeed
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Sensors
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -48,11 +57,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.jzb.tower.android.ui.AndroidPlatformActions
 import com.jzb.tower.android.ui.components.FormatUtils
 import com.jzb.tower.android.ui.components.TowerCard
+import com.jzb.tower.android.ui.components.TowerSelectionCheckmark
+import com.jzb.tower.android.ui.components.towerPressScale
 import com.jzb.tower.android.ui.theme.TowerMotion
 import com.jzb.tower.android.ui.theme.TowerTheme
 import com.jzb.tower.core.model.NodeRuntimeInfo
@@ -66,6 +81,7 @@ fun SubscriptionCard(
     nodes: List<ProxyNode>,
     runtimeMap: Map<String, NodeRuntimeInfo>,
     excludedNodeIds: Set<String>,
+    testingNodeIds: Set<String>,
     isRefreshing: Boolean,
     onToggleEnabled: () -> Unit,
     onRefresh: () -> Unit,
@@ -76,9 +92,11 @@ fun SubscriptionCard(
     modifier: Modifier = Modifier,
 ) {
     val palette = TowerTheme.palette
+    val context = LocalContext.current
     var isExpanded by rememberSaveable(source.id) { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showActionMenu by remember { mutableStateOf(false) }
 
     val usage = source.usage
     val remainingBytes = usage?.remainingBytes
@@ -88,21 +106,48 @@ fun SubscriptionCard(
         usage?.notices?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct().orEmpty()
     }
 
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = TowerMotion.disclosureSpec(),
+        label = "subChevron",
+    )
+
+    val refreshRotation = if (isRefreshing) {
+        val infinite = rememberInfiniteTransition(label = "subRefreshSpin")
+        val angle by infinite.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 850, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "subRefreshAngle",
+        )
+        angle
+    } else {
+        0f
+    }
+
     TowerCard(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+            // Header Row: 40dp soft-blue icon | bold title + gray host | rotating chevron | TowerSelectionCheckmark
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { isExpanded = !isExpanded }
-                        .padding(vertical = 4.dp),
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { isExpanded = !isExpanded },
+                        )
+                        .padding(vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(11.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Box(
                         modifier = Modifier
@@ -114,17 +159,17 @@ fun SubscriptionCard(
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.RssFeed,
+                            imageVector = Icons.Rounded.Sensors,
                             contentDescription = null,
                             tint = if (source.isEnabled) palette.primary else palette.textTertiary,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(21.dp),
                         )
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = source.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = palette.textPrimary,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = if (source.isEnabled) palette.textPrimary else palette.textSecondary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -137,20 +182,24 @@ fun SubscriptionCard(
                         )
                     }
                     Icon(
-                        imageVector = if (isExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        imageVector = Icons.Rounded.ExpandMore,
                         contentDescription = if (isExpanded) "收起节点" else "展开节点",
                         tint = palette.textSecondary,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier
+                            .size(20.dp)
+                            .graphicsLayer { rotationZ = chevronRotation },
                     )
                 }
 
-                Switch(
-                    checked = source.isEnabled,
-                    onCheckedChange = { onToggleEnabled() },
+                TowerSelectionCheckmark(
+                    selected = source.isEnabled,
+                    onToggle = onToggleEnabled,
+                    contentDescription = if (source.isEnabled) "停用订阅" else "启用订阅",
                 )
             }
 
-            if (remainingBytes != null) {
+            // Quota Row + 3.5dp animated emerald progress bar (iphone-1.jpg)
+            if (remainingBytes != null || totalBytes != null) {
                 Spacer(Modifier.height(10.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
@@ -158,41 +207,75 @@ fun SubscriptionCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = "剩余 ${FormatUtils.formatBytes(remainingBytes)}",
-                            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
-                            color = palette.textPrimary,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.DonutLarge,
+                                contentDescription = null,
+                                tint = palette.textPrimary,
+                                modifier = Modifier.size(13.dp),
+                            )
+                            Text(
+                                text = if (remainingBytes != null) {
+                                    "剩余 ${FormatUtils.formatBytes(remainingBytes)}"
+                                } else {
+                                    "已用 ${FormatUtils.formatBytes(usage?.usedBytes ?: 0L)}"
+                                },
+                                style = MaterialTheme.typography.labelMedium.copy(
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontFeatureSettings = "tnum",
+                                ),
+                                color = palette.textPrimary,
+                            )
+                        }
                         if (totalBytes != null) {
                             Text(
-                                text = "总计 ${FormatUtils.formatBytes(totalBytes)}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                                text = "总流量 ${FormatUtils.formatBytes(totalBytes)}",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 11.sp,
+                                    fontFeatureSettings = "tnum",
+                                ),
                                 color = palette.textSecondary,
                             )
                         }
                     }
+
                     if (usedFraction != null) {
-                        val remainingFraction = (1f - usedFraction.coerceIn(0f, 1f))
+                        val remainingFractionTarget = (1f - usedFraction.coerceIn(0f, 1f))
+                        val animatedFraction by animateFloatAsState(
+                            targetValue = remainingFractionTarget,
+                            animationSpec = TowerMotion.disclosureSpec(),
+                            label = "quotaProgress",
+                        )
                         val barColor = when {
-                            remainingFraction < 0.1f -> palette.coral
-                            remainingFraction < 0.25f -> palette.amber
+                            remainingFractionTarget < 0.1f -> palette.coral
+                            remainingFractionTarget < 0.25f -> palette.amber
                             else -> palette.emerald
                         }
-                        LinearProgressIndicator(
-                            progress = { remainingFraction },
-                            color = barColor,
-                            trackColor = palette.divider,
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(50)),
-                        )
+                                .height(3.5.dp)
+                                .clip(CircleShape)
+                                .background(palette.divider),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(animatedFraction.coerceIn(0.02f, 1f))
+                                    .height(3.5.dp)
+                                    .clip(CircleShape)
+                                    .background(barColor),
+                            )
+                        }
                     }
                 }
             }
 
             if (!source.lastError.isNullOrBlank()) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -218,8 +301,11 @@ fun SubscriptionCard(
                 }
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = palette.divider, thickness = 0.5.dp)
+            Spacer(Modifier.height(8.dp))
 
+            // Bottom facts row: "13 个节点 · 160 天到期" | "🕒 6分钟前" + refresh + share + menu
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -227,11 +313,11 @@ fun SubscriptionCard(
                 Row(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     Text(
                         text = "${nodes.size} 个节点",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
                         color = palette.textSecondary,
                     )
                     if (usage?.expiresAtEpochMs != null) {
@@ -239,75 +325,121 @@ fun SubscriptionCard(
                         Text("·", color = palette.textTertiary, style = MaterialTheme.typography.labelSmall)
                         Text(
                             text = expiryText,
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
                             color = if (isUrgent) palette.amber else palette.textSecondary,
-                        )
-                    }
-                    if (source.lastUpdatedAtEpochMs != null) {
-                        Text("·", color = palette.textTertiary, style = MaterialTheme.typography.labelSmall)
-                        Icon(
-                            imageVector = Icons.Rounded.Schedule,
-                            contentDescription = null,
-                            tint = palette.textTertiary,
-                            modifier = Modifier.size(12.dp),
-                        )
-                        Text(
-                            text = FormatUtils.formatRelativeTime(source.lastUpdatedAtEpochMs!!),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = palette.textTertiary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
 
-                IconButton(
-                    onClick = onRefresh,
-                    enabled = !isRefreshing,
-                    modifier = Modifier.size(36.dp),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    if (isRefreshing) {
-                        CircularProgressIndicator(
-                            strokeWidth = 2.dp,
-                            color = palette.primary,
-                            modifier = Modifier.size(16.dp),
+                    if (source.lastUpdatedAtEpochMs != null) {
+                        Icon(
+                            imageVector = Icons.Rounded.Schedule,
+                            contentDescription = null,
+                            tint = palette.textTertiary,
+                            modifier = Modifier.size(13.dp),
                         )
-                    } else {
+                        Text(
+                            text = FormatUtils.formatRelativeTime(source.lastUpdatedAtEpochMs!!),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                            color = palette.textTertiary,
+                            maxLines = 1,
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .towerPressScale(enabled = !isRefreshing, onClick = onRefresh),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Icon(
                             imageVector = Icons.Rounded.Refresh,
                             contentDescription = "刷新订阅",
                             tint = palette.primary,
-                            modifier = Modifier.size(19.dp),
+                            modifier = Modifier
+                                .size(19.dp)
+                                .graphicsLayer { rotationZ = refreshRotation },
                         )
                     }
-                }
-                IconButton(
-                    onClick = { showEditDialog = true },
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Edit,
-                        contentDescription = "编辑订阅",
-                        tint = palette.textSecondary,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                IconButton(
-                    onClick = { showDeleteConfirm = true },
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.DeleteOutline,
-                        contentDescription = "删除订阅",
-                        tint = palette.coral,
-                        modifier = Modifier.size(19.dp),
-                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .towerPressScale(
+                                onClick = {
+                                    AndroidPlatformActions.shareText(context, source.name, source.urlString)
+                                },
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.IosShare,
+                            contentDescription = "分享订阅链接",
+                            tint = palette.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+
+                    Box {
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .towerPressScale(onClick = { showActionMenu = true }),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreHoriz,
+                                contentDescription = "更多操作",
+                                tint = palette.textSecondary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showActionMenu,
+                            onDismissRequest = { showActionMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("编辑订阅") },
+                                leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                                onClick = {
+                                    showActionMenu = false
+                                    showEditDialog = true
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("分享链接") },
+                                leadingIcon = { Icon(Icons.Rounded.IosShare, contentDescription = null) },
+                                onClick = {
+                                    showActionMenu = false
+                                    AndroidPlatformActions.shareText(context, source.name, source.urlString)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("删除订阅", color = palette.coral) },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.DeleteOutline, contentDescription = null, tint = palette.coral)
+                                },
+                                onClick = {
+                                    showActionMenu = false
+                                    showDeleteConfirm = true
+                                },
+                            )
+                        }
+                    }
                 }
             }
         }
 
         // CLAUDE.md #7: NEVER use top slide-in transition when expanding subscription details;
-        // use smooth opacity/height expansion only, and NO "显示更多节点" button.
+        // pure opacity + height expansion only, and NO "显示更多节点" button.
         AnimatedVisibility(
             visible = isExpanded,
             enter = fadeIn(TowerMotion.disclosureSpec()) + expandVertically(TowerMotion.disclosureSpec()),
@@ -316,10 +448,10 @@ fun SubscriptionCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                    .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
             ) {
                 if (distinctNotices.isNotEmpty()) {
-                    HorizontalDivider(color = palette.divider)
+                    HorizontalDivider(color = palette.divider, thickness = 0.5.dp)
                     Spacer(Modifier.height(10.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -346,30 +478,40 @@ fun SubscriptionCard(
                             modifier = Modifier.padding(vertical = 3.dp),
                         )
                         if (idx < distinctNotices.lastIndex) {
-                            HorizontalDivider(color = palette.divider)
+                            HorizontalDivider(color = palette.divider, thickness = 0.5.dp)
                         }
                     }
                 }
 
                 if (nodes.isNotEmpty()) {
-                    HorizontalDivider(color = palette.divider, modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(
+                        color = palette.divider,
+                        thickness = 0.5.dp,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
                     nodes.forEachIndexed { idx, node ->
                         CompactNodeRow(
                             node = node,
                             runtime = runtimeMap[node.id],
                             isIncluded = !excludedNodeIds.contains(node.id),
+                            isTestingLatency = testingNodeIds.contains(node.id),
                             onClick = { onNodeClick(node) },
                             onToggleIncluded = { included -> onToggleNodeExcluded(node, !included) },
                         )
                         if (idx < nodes.lastIndex) {
                             HorizontalDivider(
                                 color = palette.divider,
+                                thickness = 0.5.dp,
                                 modifier = Modifier.padding(start = 38.dp),
                             )
                         }
                     }
                 } else {
-                    HorizontalDivider(color = palette.divider, modifier = Modifier.padding(vertical = 8.dp))
+                    HorizontalDivider(
+                        color = palette.divider,
+                        thickness = 0.5.dp,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
                     Text(
                         text = "当前没有解析到节点",
                         style = MaterialTheme.typography.bodySmall,

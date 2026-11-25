@@ -3,9 +3,13 @@ package com.jzb.tower.android.ui.rules
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
@@ -13,9 +17,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -25,12 +26,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.jzb.tower.android.ui.components.PrimaryActionButton
 import com.jzb.tower.android.ui.components.TowerCard
+import com.jzb.tower.android.ui.components.TowerFloatingPillButton
+import com.jzb.tower.android.ui.components.TowerSegmentedControl
 import com.jzb.tower.android.ui.theme.TowerTheme
 import com.jzb.tower.core.model.RuleScheme
 import kotlinx.coroutines.launch
@@ -55,34 +59,39 @@ fun ImportSchemeSheet(
     ModalBottomSheet(
         onDismissRequest = { if (!isImporting) onDismiss() },
         sheetState = sheetState,
+        dragHandle = null,
         containerColor = palette.groupedBackground,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 28.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                text = "导入规则方案",
-                style = MaterialTheme.typography.headlineSmall,
-                color = palette.textPrimary,
-            )
-
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    selected = modeIndex == 0,
-                    onClick = { modeIndex = 0 },
-                    shape = SegmentedButtonDefaults.itemShape(0, 2),
-                ) { Text("HTTPS 链接") }
-                SegmentedButton(
-                    selected = modeIndex == 1,
-                    onClick = { modeIndex = 1 },
-                    shape = SegmentedButtonDefaults.itemShape(1, 2),
-                ) { Text("粘贴配置文本") }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "导入规则方案",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = palette.textPrimary,
+                )
+                TowerFloatingPillButton(
+                    text = "取消",
+                    enabled = !isImporting,
+                    onClick = onDismiss,
+                )
             }
+
+            TowerSegmentedControl(
+                options = listOf("HTTPS 链接", "粘贴配置文本"),
+                selectedIndex = modeIndex,
+                onSelect = { modeIndex = it },
+            )
 
             TowerCard(contentPadding = PaddingValues(14.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -154,6 +163,7 @@ fun ImportSchemeSheet(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+            Spacer(Modifier.height(8.dp))
         }
     }
 }

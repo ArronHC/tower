@@ -1,6 +1,5 @@
 package com.jzb.tower.android.ui.rules
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +48,7 @@ import com.jzb.tower.android.ui.components.FormatUtils
 import com.jzb.tower.android.ui.components.PrimaryActionButton
 import com.jzb.tower.android.ui.components.TintedActionButton
 import com.jzb.tower.android.ui.components.TowerCard
+import com.jzb.tower.android.ui.components.TowerFloatingPillButton
 import com.jzb.tower.android.ui.theme.TowerTheme
 import com.jzb.tower.core.model.RuleGroupPresentation
 import com.jzb.tower.core.model.RuleSchemeGroupKind
@@ -107,21 +107,32 @@ fun RuleGroupDetailSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        dragHandle = null,
         containerColor = palette.groupedBackground,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 28.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                text = "策略组详情",
-                style = MaterialTheme.typography.headlineSmall,
-                color = palette.textPrimary,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "策略组详情",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = palette.textPrimary,
+                )
+                TowerFloatingPillButton(
+                    text = "关闭",
+                    onClick = onDismiss,
+                )
+            }
 
             TowerCard(contentPadding = PaddingValues(14.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -200,7 +211,7 @@ fun RuleGroupDetailSheet(
                             }
                         }
                         if (idx < allReferenceCandidates.lastIndex) {
-                            HorizontalDivider(color = palette.divider)
+                            HorizontalDivider(color = palette.divider, thickness = 0.5.dp)
                         }
                     }
                 } else {
@@ -284,7 +295,7 @@ fun RuleGroupDetailSheet(
                             }
                         }
                         if (idx < supplements.lastIndex) {
-                            HorizontalDivider(color = palette.divider)
+                            HorizontalDivider(color = palette.divider, thickness = 0.5.dp)
                         }
                     }
                 }
@@ -329,7 +340,7 @@ fun RuleGroupDetailSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            // Deletion confirmation dialog hosted directly on this detail sheet (per HANDOFF.md)
+            // Deletion confirmation dialog hosted directly on this detail sheet
             if (!group.isProtected) {
                 TintedActionButton(
                     text = "删除策略组",
@@ -339,6 +350,7 @@ fun RuleGroupDetailSheet(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            Spacer(Modifier.height(8.dp))
         }
     }
 

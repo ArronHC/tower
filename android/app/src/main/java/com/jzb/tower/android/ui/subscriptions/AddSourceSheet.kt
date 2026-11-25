@@ -56,6 +56,7 @@ import com.jzb.tower.android.ui.components.PrimaryActionButton
 import com.jzb.tower.android.ui.components.PrivacyBadge
 import com.jzb.tower.android.ui.components.TintedActionButton
 import com.jzb.tower.android.ui.components.TowerCard
+import com.jzb.tower.android.ui.components.TowerFloatingPillButton
 import com.jzb.tower.android.ui.theme.TowerMotion
 import com.jzb.tower.android.ui.theme.TowerTheme
 import com.jzb.tower.core.model.DetectedSourceKind
@@ -113,14 +114,15 @@ fun AddSourceSheet(
     ModalBottomSheet(
         onDismissRequest = { if (!isSaving) onDismiss() },
         sheetState = sheetState,
+        dragHandle = null,
         containerColor = palette.groupedBackground,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 28.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Row(
@@ -133,8 +135,14 @@ fun AddSourceSheet(
                     style = MaterialTheme.typography.headlineSmall,
                     color = palette.textPrimary,
                 )
-                PrivacyBadge(text = "仅在本机处理")
+                TowerFloatingPillButton(
+                    text = "取消",
+                    enabled = !isSaving,
+                    onClick = onDismiss,
+                )
             }
+
+            PrivacyBadge(text = "仅在本机处理")
 
             TowerCard(contentPadding = PaddingValues(14.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -356,6 +364,7 @@ fun AddSourceSheet(
                     )
                 }
             }
+            Spacer(Modifier.height(8.dp))
         }
     }
 }

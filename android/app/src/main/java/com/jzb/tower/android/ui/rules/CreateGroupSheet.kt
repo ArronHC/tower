@@ -24,9 +24,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -46,6 +43,8 @@ import androidx.compose.ui.unit.sp
 import com.jzb.tower.android.ui.components.FormatUtils
 import com.jzb.tower.android.ui.components.PrimaryActionButton
 import com.jzb.tower.android.ui.components.TowerCard
+import com.jzb.tower.android.ui.components.TowerFloatingPillButton
+import com.jzb.tower.android.ui.components.TowerSegmentedControl
 import com.jzb.tower.android.ui.theme.TowerTheme
 import com.jzb.tower.core.model.RuleSchemeGroupKind
 import com.jzb.tower.core.model.RuleSchemeGroupMember
@@ -78,37 +77,42 @@ fun CreateGroupSheet(
     ModalBottomSheet(
         onDismissRequest = { if (!isSaving) onDismiss() },
         sheetState = sheetState,
+        dragHandle = null,
         containerColor = palette.groupedBackground,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 28.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                text = "新建策略组",
-                style = MaterialTheme.typography.headlineSmall,
-                color = palette.textPrimary,
-            )
-
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    selected = groupModeIndex == 0,
-                    onClick = { groupModeIndex = 0 },
-                    shape = SegmentedButtonDefaults.itemShape(0, 2),
-                ) { Text("节点筛选组") }
-                SegmentedButton(
-                    selected = groupModeIndex == 1,
-                    onClick = {
-                        groupModeIndex = 1
-                        selectedKind = RuleSchemeGroupKind.SELECT
-                    },
-                    shape = SegmentedButtonDefaults.itemShape(1, 2),
-                ) { Text("分流策略组") }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "新建策略组",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = palette.textPrimary,
+                )
+                TowerFloatingPillButton(
+                    text = "取消",
+                    enabled = !isSaving,
+                    onClick = onDismiss,
+                )
             }
+
+            TowerSegmentedControl(
+                options = listOf("节点筛选组", "分流策略组"),
+                selectedIndex = groupModeIndex,
+                onSelect = { idx ->
+                    groupModeIndex = idx
+                    if (idx == 1) selectedKind = RuleSchemeGroupKind.SELECT
+                },
+            )
 
             TowerCard(contentPadding = PaddingValues(14.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -193,7 +197,7 @@ fun CreateGroupSheet(
                             }
                         }
                         if (idx < candidates.lastIndex) {
-                            HorizontalDivider(color = palette.divider)
+                            HorizontalDivider(color = palette.divider, thickness = 0.5.dp)
                         }
                     }
                 }
@@ -235,6 +239,7 @@ fun CreateGroupSheet(
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
+            Spacer(Modifier.height(8.dp))
         }
     }
 }

@@ -54,8 +54,8 @@ jobs:
           if [ ! -f "$APK_SRC" ]; then
             APK_SRC="android/app/build/outputs/apk/release/app-release-unsigned.apk"
           fi
-          cp "$APK_SRC" "dist/Tower-1.0.34-84-android.apk"
-          (cd dist && sha256sum "Tower-1.0.34-84-android.apk" > "Tower-1.0.34-84-android.apk.sha256")
+          cp "$APK_SRC" "dist/Tower-1.0.34-85-android.apk"
+          (cd dist && sha256sum "Tower-1.0.34-85-android.apk" > "Tower-1.0.34-85-android.apk.sha256")
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

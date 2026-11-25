@@ -1,5 +1,6 @@
 package com.jzb.tower.android.ui.subscriptions
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -17,11 +18,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Clear
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
@@ -31,7 +33,6 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -41,7 +42,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -53,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -62,9 +63,13 @@ import androidx.compose.ui.unit.sp
 import com.jzb.tower.android.ui.AndroidPlatformActions
 import com.jzb.tower.android.ui.components.FormatUtils
 import com.jzb.tower.android.ui.components.QrCodeView
-import com.jzb.tower.android.ui.components.SectionHeading
 import com.jzb.tower.android.ui.components.TintedActionButton
 import com.jzb.tower.android.ui.components.TowerCard
+import com.jzb.tower.android.ui.components.TowerFloatingPillButton
+import com.jzb.tower.android.ui.components.TowerIosSwitch
+import com.jzb.tower.android.ui.components.TowerLatencyBadge
+import com.jzb.tower.android.ui.components.TowerSelectionCheckmark
+import com.jzb.tower.android.ui.components.towerPressScale
 import com.jzb.tower.android.ui.theme.TowerTheme
 import com.jzb.tower.core.model.CountryEntry
 import com.jzb.tower.core.model.NodeExportNameFilter
@@ -85,6 +90,7 @@ fun CompactNodeRow(
     node: ProxyNode,
     runtime: NodeRuntimeInfo?,
     isIncluded: Boolean,
+    isTestingLatency: Boolean = false,
     onClick: () -> Unit,
     onToggleIncluded: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
@@ -96,26 +102,26 @@ fun CompactNodeRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // CLAUDE.md #20: Flag Emoji rendered directly without circular background
         Box(
-            modifier = Modifier.width(30.dp),
+            modifier = Modifier.width(28.dp),
             contentAlignment = Alignment.Center,
         ) {
             if (flagEmoji != null) {
                 Text(
                     text = flagEmoji,
-                    fontSize = 21.sp,
+                    fontSize = 20.sp,
                 )
             } else {
                 Icon(
                     imageVector = Icons.Rounded.Public,
                     contentDescription = null,
                     tint = palette.textTertiary,
-                    modifier = Modifier.size(19.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -156,174 +162,272 @@ fun CompactNodeRow(
             }
         }
 
-        val latency = runtime?.latency
-        if (latency != null) {
-            val ms = latency.milliseconds
-            val color = FormatUtils.latencyColor(ms)
-            Text(
-                text = FormatUtils.latencyBadgeText(latency),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontFeatureSettings = "tnum",
-                ),
-                color = color,
-                maxLines = 1,
-            )
-        }
+        // Fixed 58dp min-width slot so node name truncation never shifts during speed tests
+        TowerLatencyBadge(
+            measurement = runtime?.latency,
+            isTesting = isTestingLatency,
+        )
 
-        Switch(
-            checked = isIncluded,
-            onCheckedChange = onToggleIncluded,
+        TowerSelectionCheckmark(
+            selected = isIncluded,
+            onToggle = { onToggleIncluded(!isIncluded) },
+            contentDescription = if (isIncluded) "停用节点" else "启用节点",
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NodeSectionHeader(
-    totalVisibleCount: Int,
-    searchQuery: String,
-    onSearchQueryChange: (String) -> Unit,
-    inclusionFilter: NodeInclusionFilter,
-    onInclusionFilterChange: (NodeInclusionFilter) -> Unit,
-    selectedProtocol: ProxyKind?,
-    onSelectedProtocolChange: (ProxyKind?) -> Unit,
-    availableProtocols: List<ProxyKind>,
-    selectedCountryCode: String?,
-    selectedCountryLabel: String?,
-    onClearCountryFilter: () -> Unit,
+fun ManageNodesModalSheet(
+    nodes: List<ProxyNode>,
+    runtimeMap: Map<String, NodeRuntimeInfo>,
+    excludedNodeIds: Set<String>,
+    testingNodeIds: Set<String>,
     isTestingLatency: Boolean,
-    onTestVisibleLatencies: () -> Unit,
     activeExportFilter: NodeExportNameFilter?,
-    onOpenExportFilterDialog: () -> Unit,
+    onToggleNodeExcluded: (ProxyNode, Boolean) -> Unit,
+    onSetNodesExcluded: (List<String>, Boolean) -> Unit,
+    onTestVisibleLatencies: (List<String>) -> Unit,
+    onNodeClick: (ProxyNode) -> Unit,
+    onOpenExportFilter: () -> Unit,
+    onDismiss: () -> Unit,
 ) {
     val palette = TowerTheme.palette
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var searchQuery by remember { mutableStateOf("") }
+    var inclusionFilter by remember { mutableStateOf(NodeInclusionFilter.ALL) }
+    var selectedProtocol by remember { mutableStateOf<ProxyKind?>(null) }
+
+    val availableProtocols = remember(nodes) {
+        nodes.map { it.kind }.distinct().sortedBy { it.ordinal }
+    }
+
+    val filtered = remember(nodes, excludedNodeIds, searchQuery, inclusionFilter, selectedProtocol) {
+        val q = searchQuery.trim().lowercase()
+        nodes.filter { node ->
+            val included = !excludedNodeIds.contains(node.id)
+            when (inclusionFilter) {
+                NodeInclusionFilter.ALL -> true
+                NodeInclusionFilter.ACTIVE -> included
+                NodeInclusionFilter.EXCLUDED -> !included
+            } &&
+                (selectedProtocol == null || node.kind == selectedProtocol) &&
+                (
+                    q.isEmpty() ||
+                        node.name.lowercase().contains(q) ||
+                        node.server.lowercase().contains(q) ||
+                        node.kind.rawValue.lowercase().contains(q)
+                    )
+        }
+    }
+
     val hasExportFilter = activeExportFilter != null &&
         (activeExportFilter.includeKeywords.isNotEmpty() || activeExportFilter.excludeKeywords.isNotEmpty())
 
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SectionHeading(
-            title = "节点列表",
-            detail = "$totalVisibleCount 个",
-            trailing = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Surface(
-                        onClick = onOpenExportFilterDialog,
-                        shape = RoundedCornerShape(50),
-                        color = if (hasExportFilter) palette.primaryContainer else palette.cardSurface,
-                        border = androidx.compose.foundation.BorderStroke(0.75.dp, palette.cardBorder),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.FilterList,
-                                contentDescription = null,
-                                tint = if (hasExportFilter) palette.primary else palette.textSecondary,
-                                modifier = Modifier.size(15.dp),
-                            )
-                            Text(
-                                text = "全局名称筛选",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (hasExportFilter) palette.primary else palette.textSecondary,
-                            )
-                        }
-                    }
-
-                    Surface(
-                        onClick = onTestVisibleLatencies,
-                        enabled = !isTestingLatency && totalVisibleCount > 0,
-                        shape = RoundedCornerShape(50),
-                        color = palette.primaryContainer,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            if (isTestingLatency) {
-                                CircularProgressIndicator(
-                                    strokeWidth = 2.dp,
-                                    color = palette.primary,
-                                    modifier = Modifier.size(13.dp),
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Rounded.Speed,
-                                    contentDescription = null,
-                                    tint = palette.primary,
-                                    modifier = Modifier.size(15.dp),
-                                )
-                            }
-                            Text(
-                                text = if (isTestingLatency) "测速中" else "批量测速",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = palette.primary,
-                            )
-                        }
-                    }
-                }
-            },
-        )
-
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChange,
-            placeholder = { Text("搜索节点名称、服务器或协议") },
-            leadingIcon = {
-                Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-            },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchQueryChange("") }) {
-                        Icon(Icons.Rounded.Clear, contentDescription = "清除", modifier = Modifier.size(18.dp))
-                    }
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        Row(
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = null,
+        containerColor = palette.groupedBackground,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (selectedCountryCode != null && selectedCountryLabel != null) {
-                FilterChip(
-                    selected = true,
-                    onClick = onClearCountryFilter,
-                    label = { Text(selectedCountryLabel) },
-                    trailingIcon = {
-                        Icon(Icons.Rounded.Close, contentDescription = "清除地区", modifier = Modifier.size(15.dp))
-                    },
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "节点管理",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = palette.textPrimary,
+                )
+                TowerFloatingPillButton(
+                    text = "完成",
+                    onClick = onDismiss,
                 )
             }
 
-            NodeInclusionFilter.entries.forEach { mode ->
-                FilterChip(
-                    selected = inclusionFilter == mode,
-                    onClick = { onInclusionFilterChange(mode) },
-                    label = { Text(mode.label) },
-                )
+            // Capsule search bar matching iphone-2.jpg
+            Surface(
+                shape = CircleShape,
+                color = palette.cardSurface,
+                border = BorderStroke(0.75.dp, palette.cardBorder),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = null,
+                        tint = palette.textSecondary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = palette.textPrimary),
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        decorationBox = { inner ->
+                            if (searchQuery.isEmpty()) {
+                                Text(
+                                    text = "搜索节点名称、服务器或协议",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = palette.textTertiary,
+                                )
+                            }
+                            inner()
+                        },
+                    )
+                    if (searchQuery.isNotEmpty()) {
+                        Icon(
+                            imageVector = Icons.Rounded.Clear,
+                            contentDescription = "清除",
+                            tint = palette.textSecondary,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clickable { searchQuery = "" },
+                        )
+                    }
+                }
             }
 
-            availableProtocols.forEach { kind ->
-                FilterChip(
-                    selected = selectedProtocol == kind,
-                    onClick = {
-                        onSelectedProtocolChange(if (selectedProtocol == kind) null else kind)
-                    },
-                    label = { Text(FormatUtils.proxyKindLabel(kind)) },
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Surface(
+                    onClick = onOpenExportFilter,
+                    shape = CircleShape,
+                    color = if (hasExportFilter) palette.primaryContainer else palette.cardSurface,
+                    border = BorderStroke(0.75.dp, palette.cardBorder),
+                    modifier = Modifier.towerPressScale(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 11.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.FilterList,
+                            contentDescription = null,
+                            tint = if (hasExportFilter) palette.primary else palette.textSecondary,
+                            modifier = Modifier.size(15.dp),
+                        )
+                        Text(
+                            text = "名称筛选",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (hasExportFilter) palette.primary else palette.textSecondary,
+                        )
+                    }
+                }
+
+                NodeInclusionFilter.entries.forEach { mode ->
+                    FilterChip(
+                        selected = inclusionFilter == mode,
+                        onClick = { inclusionFilter = mode },
+                        label = { Text(mode.label) },
+                    )
+                }
+
+                availableProtocols.forEach { kind ->
+                    FilterChip(
+                        selected = selectedProtocol == kind,
+                        onClick = {
+                            selectedProtocol = if (selectedProtocol == kind) null else kind
+                        },
+                        label = { Text(FormatUtils.proxyKindLabel(kind)) },
+                    )
+                }
             }
+
+            if (filtered.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "${filtered.size} 个节点",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.textSecondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(
+                        onClick = { onSetNodesExcluded(filtered.map { it.id }, false) },
+                    ) {
+                        Text("全选")
+                    }
+                    TextButton(
+                        onClick = { onSetNodesExcluded(filtered.map { it.id }, true) },
+                    ) {
+                        Text("全停用", color = palette.textSecondary)
+                    }
+                    TintedActionButton(
+                        text = if (isTestingLatency) "测速中" else "测速",
+                        icon = Icons.Rounded.Speed,
+                        enabled = !isTestingLatency,
+                        onClick = { onTestVisibleLatencies(filtered.map { it.id }) },
+                        modifier = Modifier.height(34.dp),
+                    )
+                }
+            }
+
+            if (filtered.isEmpty()) {
+                TowerCard(contentPadding = PaddingValues(18.dp)) {
+                    Text(
+                        text = "没有符合当前筛选条件的节点。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.textSecondary,
+                    )
+                }
+            } else {
+                TowerCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                ) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 420.dp),
+                    ) {
+                        itemsIndexed(filtered, key = { _, n -> n.id }) { idx, node ->
+                            CompactNodeRow(
+                                node = node,
+                                runtime = runtimeMap[node.id],
+                                isIncluded = !excludedNodeIds.contains(node.id),
+                                isTestingLatency = testingNodeIds.contains(node.id),
+                                onClick = { onNodeClick(node) },
+                                onToggleIncluded = { included -> onToggleNodeExcluded(node, !included) },
+                            )
+                            if (idx < filtered.lastIndex) {
+                                HorizontalDivider(
+                                    color = palette.divider,
+                                    thickness = 0.5.dp,
+                                    modifier = Modifier.padding(start = 36.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -352,13 +456,14 @@ fun NodeDetailSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        dragHandle = null,
         containerColor = palette.groupedBackground,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 28.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Row(
@@ -386,6 +491,10 @@ fun NodeDetailSheet(
                 IconButton(onClick = { showRenameDialog = true }) {
                     Icon(Icons.Rounded.Edit, contentDescription = "重命名节点", tint = palette.primary)
                 }
+                TowerFloatingPillButton(
+                    text = "完成",
+                    onClick = onDismiss,
+                )
             }
 
             TowerCard(contentPadding = PaddingValues(16.dp)) {
@@ -506,6 +615,7 @@ fun NodeDetailSheet(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+            Spacer(Modifier.height(8.dp))
         }
     }
 
@@ -653,7 +763,7 @@ private fun NodeCountryPickerDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (selected) palette.primaryContainer else androidx.compose.ui.graphics.Color.Transparent)
+                                .background(if (selected) palette.primaryContainer else Color.Transparent)
                                 .clickable { onSelect(entry.code) }
                                 .padding(horizontal = 10.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -672,7 +782,7 @@ private fun NodeCountryPickerDialog(
                                 color = palette.textSecondary,
                             )
                         }
-                        HorizontalDivider(color = palette.divider)
+                        HorizontalDivider(color = palette.divider, thickness = 0.5.dp)
                     }
                 }
             }
@@ -736,7 +846,7 @@ fun NodeExportFilterDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text("使用正则表达式", style = MaterialTheme.typography.bodyMedium)
-                    Switch(checked = useRegex, onCheckedChange = { useRegex = it })
+                    TowerIosSwitch(checked = useRegex, onCheckedChange = { useRegex = it })
                 }
             }
         },

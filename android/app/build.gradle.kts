@@ -50,7 +50,7 @@ android {
         applicationId = "com.jzb.tower"
         minSdk = 26
         targetSdk = 35
-        versionCode = 84
+        versionCode = 85
         versionName = "1.0.34"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

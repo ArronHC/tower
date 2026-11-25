@@ -31,6 +31,12 @@ class TowerViewModel(
     private val _selectedTab = MutableStateFlow(AppTab.SUBSCRIPTIONS)
     val selectedTab: StateFlow<AppTab> = _selectedTab.asStateFlow()
 
+    private val _showSettingsSheet = MutableStateFlow(false)
+    val showSettingsSheet: StateFlow<Boolean> = _showSettingsSheet.asStateFlow()
+
+    private val _isLanSharingSelected = MutableStateFlow(false)
+    val isLanSharingSelected: StateFlow<Boolean> = _isLanSharingSelected.asStateFlow()
+
     private val _worldMap = MutableStateFlow<WorldDotMapData?>(null)
     val worldMap: StateFlow<WorldDotMapData?> = _worldMap.asStateFlow()
 
@@ -52,6 +58,15 @@ class TowerViewModel(
     private val _isTestingLatency = MutableStateFlow(false)
     val isTestingLatency: StateFlow<Boolean> = _isTestingLatency.asStateFlow()
 
+    private val _testingNodeIds = MutableStateFlow<Set<String>>(emptySet())
+    val testingNodeIds: StateFlow<Set<String>> = _testingNodeIds.asStateFlow()
+
+    private val _latencyTestProgress = MutableStateFlow<Pair<Int, Int>?>(null)
+    val latencyTestProgress: StateFlow<Pair<Int, Int>?> = _latencyTestProgress.asStateFlow()
+
+    private val _latencyBatchCompletedTick = MutableStateFlow(0)
+    val latencyBatchCompletedTick: StateFlow<Int> = _latencyBatchCompletedTick.asStateFlow()
+
     private val _toastMessage = MutableStateFlow<ToastMessage?>(null)
     val toastMessage: StateFlow<ToastMessage?> = _toastMessage.asStateFlow()
 
@@ -63,6 +78,9 @@ class TowerViewModel(
 
     private var toastDismissJob: Job? = null
     private var generateJob: Job? = null
+    private var refreshAllJob: Job? = null
+    private var latencyTestJob: Job? = null
+    private var geographyJob: Job? = null
     private var initialized = false
 
     fun initialize() {
@@ -73,6 +91,7 @@ class TowerViewModel(
                 repository.initialize()
                 _countries.value = repository.getCountries()
                 _worldMap.value = repository.getWorldDotMap()
+                resolveNodeGeographyInBackground()
                 if (repository.state.value.snapshot.settings.autoRefreshOnOpen &&
                     repository.state.value.snapshot.subscriptions.any { it.isEnabled }
                 ) {
@@ -86,8 +105,27 @@ class TowerViewModel(
     }
 
     fun selectTab(tab: AppTab) {
+        if (tab == AppTab.SETTINGS) {
+            _showSettingsSheet.value = true
+            return
+        }
         _selectedTab.value = tab
-        if (tab == AppTab.EXPORT) {
+        if (tab == AppTab.EXPORT && !_isLanSharingSelected.value) {
+            refreshGeneratedConfig()
+        }
+    }
+
+    fun openSettings() {
+        _showSettingsSheet.value = true
+    }
+
+    fun closeSettings() {
+        _showSettingsSheet.value = false
+    }
+
+    fun selectLanSharing(selected: Boolean) {
+        _isLanSharingSelected.value = selected
+        if (!selected) {
             refreshGeneratedConfig()
         }
     }
@@ -124,10 +162,18 @@ class TowerViewModel(
     }
 
     fun replayOnboarding() {
+        _showSettingsSheet.value = false
         viewModelScope.launch {
             runCatching {
                 repository.updateSettings { it.copy(hasCompletedOnboarding = false) }
             }
+        }
+    }
+
+    private fun resolveNodeGeographyInBackground() {
+        geographyJob?.cancel()
+        geographyJob = viewModelScope.launch {
+            runCatching { repository.resolveNodeGeography() }
         }
     }
 
@@ -143,6 +189,7 @@ class TowerViewModel(
     ): Result<SubscriptionMutationResult> = runCatchingExceptCancellation {
         val result = repository.addSubscription(urlString, name, requestOptions)
         showToast("已添加「${result.subscription.name}」（${result.addedNodeCount} 个节点）", ToastTone.SUCCESS)
+        resolveNodeGeographyInBackground()
         refreshGeneratedConfig()
         result
     }
@@ -151,6 +198,7 @@ class TowerViewModel(
         val result = repository.importNodesFromText(content)
         val skippedSuffix = if (result.skippedCount > 0) "，跳过 ${result.skippedCount} 个" else ""
         showToast("已导入 ${result.addedNodes.size} 个自有节点$skippedSuffix", ToastTone.SUCCESS)
+        resolveNodeGeographyInBackground()
         refreshGeneratedConfig()
         result
     }
@@ -196,6 +244,7 @@ class TowerViewModel(
             try {
                 val res = repository.refreshSubscription(source.id)
                 showToast("已更新「${res.subscription.name}」（${res.addedNodeCount} 个节点）", ToastTone.SUCCESS)
+                resolveNodeGeographyInBackground()
                 refreshGeneratedConfig()
             } catch (e: CancellationException) {
                 throw e
@@ -209,7 +258,8 @@ class TowerViewModel(
 
     fun refreshAllSubscriptions(silent: Boolean = false) {
         if (_isRefreshing.value) return
-        viewModelScope.launch {
+        refreshAllJob?.cancel()
+        refreshAllJob = viewModelScope.launch {
             _isRefreshing.value = true
             try {
                 val results = repository.refreshAllSubscriptions()
@@ -221,6 +271,7 @@ class TowerViewModel(
                         showToast("已更新全部 ${results.size} 个订阅", ToastTone.SUCCESS)
                     }
                 }
+                resolveNodeGeographyInBackground()
                 refreshGeneratedConfig()
             } catch (e: CancellationException) {
                 throw e
@@ -232,22 +283,64 @@ class TowerViewModel(
         }
     }
 
+    fun cancelRefreshAll() {
+        refreshAllJob?.cancel()
+        refreshAllJob = null
+        _isRefreshing.value = false
+        showToast("已取消刷新订阅", ToastTone.NEUTRAL)
+    }
+
     fun testNodeLatency(nodeIds: List<String>? = null) {
         if (_isTestingLatency.value) return
-        viewModelScope.launch {
+        val targetIds = nodeIds ?: run {
+            val snap = state.value.snapshot
+            val enabledSubs = snap.subscriptions.filter { it.isEnabled }.map { it.id }.toSet()
+            val excluded = snap.excludedNodeIDs.toSet()
+            snap.nodes.filter { (it.sourceID == null || it.sourceID in enabledSubs) && it.id !in excluded }
+                .map { it.id }
+        }
+        if (targetIds.isEmpty()) return
+
+        latencyTestJob?.cancel()
+        latencyTestJob = viewModelScope.launch {
             _isTestingLatency.value = true
+            _testingNodeIds.value = targetIds.toSet()
+            val total = targetIds.size
+            var completed = 0
+            var reachable = 0
+            _latencyTestProgress.value = 0 to total
+            val mode = state.value.snapshot.settings.latencyTestMode
             try {
-                val results = repository.testNodeLatency(nodeIds, state.value.snapshot.settings.latencyTestMode)
-                val reachable = results.values.count { it.milliseconds != null }
-                showToast("测速完成：$reachable/${results.size} 个节点可达", ToastTone.SUCCESS)
+                val chunkSize = if (total > 12) 6 else total
+                for (chunk in targetIds.chunked(chunkSize)) {
+                    val res = repository.testNodeLatency(chunk, mode)
+                    completed += chunk.size
+                    reachable += res.values.count { it.milliseconds != null }
+                    _testingNodeIds.value = _testingNodeIds.value - chunk.toSet()
+                    _latencyTestProgress.value = completed.coerceAtMost(total) to total
+                }
+                if (total > 1) {
+                    _latencyBatchCompletedTick.value = _latencyBatchCompletedTick.value + 1
+                }
+                showToast("测速完成：$reachable/$total 个节点可达", ToastTone.SUCCESS)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 showToast("测速失败：${e.message}", ToastTone.ERROR)
             } finally {
                 _isTestingLatency.value = false
+                _testingNodeIds.value = emptySet()
+                _latencyTestProgress.value = null
             }
         }
+    }
+
+    fun cancelLatencyTest() {
+        latencyTestJob?.cancel()
+        latencyTestJob = null
+        _isTestingLatency.value = false
+        _testingNodeIds.value = emptySet()
+        _latencyTestProgress.value = null
     }
 
     fun toggleNodeExcluded(node: ProxyNode, excluded: Boolean) {
@@ -548,6 +641,7 @@ class TowerViewModel(
     // --- Export & LAN ---
 
     fun selectClientTarget(target: ClientTarget) {
+        _isLanSharingSelected.value = false
         viewModelScope.launch {
             runCatching {
                 repository.updateExportPreferences(selectedTarget = target)
@@ -585,12 +679,17 @@ class TowerViewModel(
         }
     }
 
-    fun updateClientOrderAndVisibility(order: List<ClientTarget>, visible: List<ClientTarget>) {
+    fun updateClientOrderAndVisibility(
+        order: List<ClientTarget>,
+        visible: List<ClientTarget>,
+        isLanVisible: Boolean? = null,
+    ) {
         viewModelScope.launch {
             runCatching {
                 repository.updateExportPreferences(
                     clientOrder = order,
                     visibleClientTargets = visible,
+                    isLANSharingVisible = isLanVisible,
                 )
             }
         }
@@ -745,6 +844,7 @@ class TowerViewModel(
     suspend fun importBackupJson(jsonText: String): Result<Unit> = runCatchingExceptCancellation {
         repository.importBackupJson(jsonText)
         showToast("已导入备份配置", ToastTone.SUCCESS)
+        resolveNodeGeographyInBackground()
         refreshGeneratedConfig()
     }
 

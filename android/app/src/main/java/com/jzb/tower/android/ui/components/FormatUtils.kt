@@ -11,6 +11,7 @@ import com.jzb.tower.core.model.NodeProbeMethod
 import com.jzb.tower.core.model.ProxyKind
 import com.jzb.tower.core.model.RuleSchemeGroupKind
 import java.net.URI
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,13 +26,32 @@ object FormatUtils {
         val tb = gb * 1024.0
         val value = bytes.toDouble()
         return when {
-            value >= tb -> String.format(Locale.US, "%.2f TiB", value / tb)
-            value >= gb -> String.format(Locale.US, "%.2f GiB", value / gb)
-            value >= mb -> String.format(Locale.US, "%.1f MiB", value / mb)
-            value >= kb -> String.format(Locale.US, "%.1f KiB", value / kb)
+            value >= tb -> String.format(Locale.US, "%.1f TB", value / tb)
+            value >= gb -> String.format(Locale.US, "%.0f GB", value / gb)
+            value >= mb -> String.format(Locale.US, "%.1f MB", value / mb)
+            value >= kb -> String.format(Locale.US, "%.1f KB", value / kb)
             else -> "$bytes B"
         }
     }
+
+    fun formatBytesDetailed(bytes: Long): String {
+        if (bytes < 0L) return "0 B"
+        val kb = 1024.0
+        val mb = kb * 1024.0
+        val gb = mb * 1024.0
+        val tb = gb * 1024.0
+        val value = bytes.toDouble()
+        return when {
+            value >= tb -> String.format(Locale.US, "%.2f TiB", value / tb)
+            value >= gb -> String.format(Locale.US, "%.1f GB", value / gb)
+            value >= mb -> String.format(Locale.US, "%.1f MB", value / mb)
+            value >= kb -> String.format(Locale.US, "%.1f KB", value / kb)
+            else -> "$bytes B"
+        }
+    }
+
+    fun formatCount(count: Int): String =
+        NumberFormat.getIntegerInstance(Locale.US).format(count)
 
     fun formatRelativeTime(epochMs: Long, nowMs: Long = System.currentTimeMillis()): String {
         val diff = nowMs - epochMs
@@ -42,9 +62,9 @@ object FormatUtils {
         val days = hours / 24L
         return when {
             seconds < 45 -> "刚刚"
-            minutes < 60 -> "${minutes} 分钟前"
-            hours < 24 -> "${hours} 小时前"
-            days < 30 -> "${days} 天前"
+            minutes < 60 -> "${minutes}分钟前"
+            hours < 24 -> "${hours}小时前"
+            days < 30 -> "${days}天前"
             else -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(epochMs))
         }
     }
@@ -76,7 +96,7 @@ object FormatUtils {
 
     fun ruleGroupKindLabel(kind: RuleSchemeGroupKind): String = when (kind) {
         RuleSchemeGroupKind.SELECT -> "手动选择"
-        RuleSchemeGroupKind.URL_TEST -> "自动测速"
+        RuleSchemeGroupKind.URL_TEST -> "延迟优选"
         RuleSchemeGroupKind.FALLBACK -> "故障转移"
         RuleSchemeGroupKind.LOAD_BALANCE -> "负载均衡"
         RuleSchemeGroupKind.SMART -> "Smart 智能"
@@ -97,13 +117,33 @@ object FormatUtils {
         NodeLatencyTestMode.TCP -> "TCP 握手"
     }
 
+    /** Exact MapLatencyBand colors matching WorldDotMapView.swift */
+    fun mapBandColor(milliseconds: Int?, isApplicable: Boolean = true, isDark: Boolean = false, selected: Boolean = false): Color {
+        val (r, g, b) = when {
+            !isApplicable -> Triple(0.68, 0.28, 0.48)
+            milliseconds == null -> Triple(0.48, 0.59, 0.69)
+            milliseconds <= 100 -> Triple(0.06, 0.65, 0.49)
+            milliseconds <= 200 -> Triple(0.20, 0.53, 0.84)
+            milliseconds <= 350 -> Triple(0.83, 0.58, 0.14)
+            else -> Triple(0.89, 0.36, 0.24)
+        }
+        fun component(value: Double): Float {
+            val base = if (isDark) value + (1.0 - value) * 0.24 else value
+            val adjusted = if (selected) base * (if (isDark) 0.82 else 0.68) else base
+            return adjusted.toFloat().coerceIn(0f, 1f)
+        }
+        return Color(red = component(r), green = component(g), blue = component(b))
+    }
+
     @Composable
-    fun latencyColor(milliseconds: Int?): Color {
+    fun latencyColor(milliseconds: Int?, isApplicable: Boolean = true): Color {
         val palette = TowerTheme.palette
         return when {
-            milliseconds == null -> palette.textSecondary
-            milliseconds < 100 -> palette.emerald
-            milliseconds <= 280 -> palette.amber
+            !isApplicable -> palette.unreachableRose
+            milliseconds == null -> palette.unreachableRose
+            milliseconds <= 100 -> palette.emerald
+            milliseconds <= 200 -> palette.lakeBlue
+            milliseconds <= 350 -> palette.amber
             else -> palette.coral
         }
     }

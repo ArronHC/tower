@@ -1,7 +1,5 @@
 package com.jzb.tower.android.ui.settings
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -41,16 +38,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.jzb.tower.android.ui.components.PrimaryActionButton
-import com.jzb.tower.android.ui.components.TintedActionButton
 import com.jzb.tower.android.ui.components.TowerCard
+import com.jzb.tower.android.ui.components.TowerFloatingPillButton
+import com.jzb.tower.android.ui.components.TowerIosSwitch
 import com.jzb.tower.android.ui.theme.TowerTheme
 import com.jzb.tower.core.model.TailnetConnection
 import kotlinx.coroutines.launch
@@ -82,14 +78,15 @@ fun TailnetSettingsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        dragHandle = null,
         containerColor = palette.groupedBackground,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 28.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Row(
@@ -97,16 +94,19 @@ fun TailnetSettingsSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = "Tailscale 内网",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = palette.textPrimary,
-                )
-                TintedActionButton(
+                TowerFloatingPillButton(
                     text = "添加内网",
                     icon = Icons.Rounded.Add,
                     onClick = { showCreateDialog = true },
-                    modifier = Modifier.height(38.dp),
+                )
+                Text(
+                    text = "Tailscale 内网",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.textPrimary,
+                )
+                TowerFloatingPillButton(
+                    text = "完成",
+                    onClick = onDismiss,
                 )
             }
 
@@ -172,7 +172,7 @@ fun TailnetSettingsSheet(
                                     color = palette.textSecondary,
                                 )
                             }
-                            Switch(
+                            TowerIosSwitch(
                                 checked = conn.isEnabled,
                                 onCheckedChange = { onToggleEnabled(conn) },
                             )
@@ -180,6 +180,7 @@ fun TailnetSettingsSheet(
                     }
                 }
             }
+            Spacer(Modifier.height(8.dp))
         }
     }
 

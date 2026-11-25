@@ -5,9 +5,15 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,26 +24,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.WifiTethering
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +58,9 @@ import com.jzb.tower.android.ui.AndroidPlatformActions
 import com.jzb.tower.android.ui.components.QrCodeView
 import com.jzb.tower.android.ui.components.TintedActionButton
 import com.jzb.tower.android.ui.components.TowerCard
+import com.jzb.tower.android.ui.components.TowerIosSwitch
+import com.jzb.tower.android.ui.components.TowerSegmentedControl
+import com.jzb.tower.android.ui.theme.TowerMotion
 import com.jzb.tower.android.ui.theme.TowerTheme
 import com.jzb.tower.core.model.ClientCatalog
 import com.jzb.tower.core.model.ExportContentMode
@@ -64,20 +68,21 @@ import com.jzb.tower.core.model.LanSharingStatus
 import com.jzb.tower.core.model.LanSubscriptionFormat
 import com.jzb.tower.core.model.QrMatrix
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Inline LAN sharing destination card displayed in ExportScreen when the LAN router icon is selected.
+ */
 @Composable
-fun LanSharingSheet(
+fun InlineLanSharingCard(
     lanStatus: LanSharingStatus,
     onToggleSharing: (Boolean) -> Unit,
     onRotateToken: () -> Unit,
     buildUrl: (LanSubscriptionFormat, ExportContentMode, String?) -> String,
     generateQr: (String) -> QrMatrix?,
     onCopiedToast: (String) -> Unit,
-    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val palette = TowerTheme.palette
     val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var selectedFormat by remember { mutableStateOf(LanSubscriptionFormat.AUTO) }
     var contentMode by remember { mutableStateOf(ExportContentMode.FULL_CONFIGURATION) }
@@ -86,7 +91,6 @@ fun LanSharingSheet(
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { _ ->
-        // Even if notification is denied, start the LAN sharing service
         onToggleSharing(true)
     }
 
@@ -100,56 +104,54 @@ fun LanSharingSheet(
         if (activeUrl.isNotBlank()) generateQr(activeUrl) else null
     }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = palette.groupedBackground,
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp)
-                .padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(
-                text = "局域网共享订阅",
-                style = MaterialTheme.typography.headlineSmall,
-                color = palette.textPrimary,
-            )
-
-            TowerCard(contentPadding = PaddingValues(16.dp)) {
+        TowerCard(contentPadding = PaddingValues(16.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Row(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).padding(end = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.WifiTethering,
-                            contentDescription = null,
-                            tint = if (lanStatus.enabled) palette.emerald else palette.textSecondary,
-                            modifier = Modifier.size(26.dp),
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(Color(0xFF0099FF), Color(0xFF00C6FF)),
+                                    ),
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.WifiTethering,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                         Column {
                             Text(
-                                text = if (lanStatus.enabled) "正在局域网共享（端口 ${lanStatus.port}）" else "共享服务已关闭",
-                                style = MaterialTheme.typography.titleMedium,
+                                text = if (lanStatus.enabled) "局域网共享已开启" else "局域网共享",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                                 color = palette.textPrimary,
                             )
                             Text(
-                                text = if (lanStatus.enabled) "同一 Wi-Fi 下的设备可扫描二维码或拉取订阅" else "仅在主动开启后监听局域网请求",
+                                text = if (lanStatus.enabled) "端口 ${lanStatus.port} · 同 Wi-Fi 设备可扫码拉取" else "开启后可向同局域网设备提供订阅",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = palette.textSecondary,
                             )
                         }
                     }
-                    Switch(
+                    TowerIosSwitch(
                         checked = lanStatus.enabled,
                         onCheckedChange = { enable ->
                             if (enable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -168,16 +170,29 @@ fun LanSharingSheet(
                         },
                     )
                 }
-            }
 
-            if (lanStatus.enabled) {
-                TowerCard(contentPadding = PaddingValues(16.dp)) {
+                AnimatedVisibility(
+                    visible = lanStatus.enabled,
+                    enter = fadeIn(TowerMotion.disclosureSpec()) + expandVertically(TowerMotion.disclosureSpec()),
+                    exit = fadeOut(TowerMotion.disclosureSpec()) + shrinkVertically(TowerMotion.disclosureSpec()),
+                ) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        HorizontalDivider(color = palette.divider, thickness = 0.5.dp)
+
+                        TowerSegmentedControl(
+                            options = listOf("完整配置", "仅节点"),
+                            selectedIndex = if (contentMode == ExportContentMode.FULL_CONFIGURATION) 0 else 1,
+                            onSelect = { idx ->
+                                contentMode = if (idx == 0) ExportContentMode.FULL_CONFIGURATION else ExportContentMode.NODES_ONLY
+                            },
+                        )
+
                         Text(
                             text = "链接格式",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = palette.textPrimary,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.textSecondary,
                         )
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -193,26 +208,13 @@ fun LanSharingSheet(
                             }
                         }
 
-                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                            SegmentedButton(
-                                selected = contentMode == ExportContentMode.FULL_CONFIGURATION,
-                                onClick = { contentMode = ExportContentMode.FULL_CONFIGURATION },
-                                shape = SegmentedButtonDefaults.itemShape(0, 2),
-                            ) { Text("完整配置") }
-                            SegmentedButton(
-                                selected = contentMode == ExportContentMode.NODES_ONLY,
-                                onClick = { contentMode = ExportContentMode.NODES_ONLY },
-                                shape = SegmentedButtonDefaults.itemShape(1, 2),
-                            ) { Text("仅节点") }
-                        }
-
                         if (activeUrl.isNotBlank()) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                QrCodeView(matrix = qrMatrix, size = 200.dp)
+                                QrCodeView(matrix = qrMatrix, size = 204.dp)
                                 Text(
                                     text = "使用其他设备客户端扫码添加",
                                     style = MaterialTheme.typography.bodySmall,
@@ -231,7 +233,7 @@ fun LanSharingSheet(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(palette.cardSubtleSurface)
-                                    .padding(10.dp),
+                                    .padding(11.dp),
                             )
 
                             Row(
@@ -259,6 +261,7 @@ fun LanSharingSheet(
                         }
 
                         if (lanStatus.urls.size > 1) {
+                            HorizontalDivider(color = palette.divider, thickness = 0.5.dp)
                             Text(
                                 text = "其他可用本机地址",
                                 style = MaterialTheme.typography.labelMedium,
@@ -296,25 +299,25 @@ fun LanSharingSheet(
                                 }
                             }
                         }
+
+                        TintedActionButton(
+                            text = "更换访问密钥（轮换 Token）",
+                            icon = Icons.Rounded.Key,
+                            tint = palette.amber,
+                            onClick = { showRotateConfirm = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
                 }
-
-                TintedActionButton(
-                    text = "更换访问密钥（轮换 Token）",
-                    icon = Icons.Rounded.Key,
-                    tint = palette.amber,
-                    onClick = { showRotateConfirm = true },
-                    modifier = Modifier.fillMaxWidth(),
-                )
             }
+        }
 
-            TowerCard(contentPadding = PaddingValues(14.dp)) {
-                Text(
-                    text = "提示：请确保接收设备与本机在同一局域网（Wi-Fi 或热点），Android 将保持前台通知以确保服务不被系统后台挂起。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = palette.textSecondary,
-                )
-            }
+        TowerCard(contentPadding = PaddingValues(14.dp)) {
+            Text(
+                text = "提示：请确保接收设备与本机在同一局域网（Wi-Fi 或热点），Android 将保持前台通知以确保服务不被系统后台挂起。",
+                style = MaterialTheme.typography.bodySmall,
+                color = palette.textSecondary,
+            )
         }
     }
 

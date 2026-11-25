@@ -10,4 +10,9 @@
     <string name="tab_export">导出</string>
     <string name="tab_settings">设置</string>
     <string name="privacy_badge">全部在这台设备上处理</string>
+    <string name="action_manage">管理</string>
+    <string name="action_done">完成</string>
+    <string name="action_settings">设置</string>
+    <string name="action_import_rules">导入规则</string>
+    <string name="action_speed_test">测速</string>
 </resources>
